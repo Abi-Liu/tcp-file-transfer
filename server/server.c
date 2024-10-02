@@ -76,10 +76,10 @@ int get_listener_socket() {
 * 35-40 total size of the packet
 */
 
-char* unpack_header(int fd) {
-  char* buf = malloc(sizeof(char) * HEADER_LENGTH);
-  
-}
+// char* unpack_header(int fd) {
+//   char* buf = malloc(sizeof(char) * HEADER_LENGTH);
+//   
+// }
 
 int main() {
   int listener_fd = get_listener_socket();
@@ -108,6 +108,20 @@ int main() {
     for(int i = 0; i < numfds + 1; i++) {
       if(FD_ISSET(i, &read_set)) {
         // found a socket ready to read
+        if(i == listener_fd) {
+          // there is a connection waiting to be accepted
+          newfd = accept(i, (struct sockaddr* )&their_addr, &their_addr_size) == 1;
+          if (newfd == -1) {
+            printf("error accepting connection\n");
+            continue;
+          }
+
+          FD_SET(newfd, &master_set);
+          if(newfd > numfds) {
+            numfds = newfd;
+          }
+          printf("New connection added\n");
+        }
       } 
     }
   }
