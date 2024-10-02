@@ -9,9 +9,11 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #define PORT "8080"
 #define BACKLOG 20
+#define HEADER_LENGTH 40
 
 int get_listener_socket() {
   struct addrinfo hints, *res, *p;
@@ -67,6 +69,47 @@ int get_listener_socket() {
   return listener;
 }
 
+/*
+* Header will be broken down like so:
+* bytes 0-5: get || post. NUL padded
+* 5-35 name of the file including extension
+* 35-40 total size of the packet
+*/
+
+char* unpack_header(int fd) {
+  char* buf = malloc(sizeof(char) * HEADER_LENGTH);
+  
+}
+
 int main() {
   int listener_fd = get_listener_socket();
+  struct sockaddr_storage their_addr;
+  socklen_t their_addr_size;
+  int newfd;
+
+
+  int numfds = listener_fd;
+  fd_set master_set, read_set;
+
+  FD_ZERO(&master_set);
+  FD_ZERO(&read_set);
+  FD_SET(listener_fd, &master_set);
+
+
+  // for now I will only handle 1 request at a time
+  // I plan on expanding this to be multithreaded in the future
+  while(true) { 
+    read_set = master_set;
+    if(select(numfds + 1, &read_set, NULL, NULL, NULL) == -1) {
+      printf("Select error\n");
+      return 1;
+    }
+
+    for(int i = 0; i < numfds + 1; i++) {
+      if(FD_ISSET(i, &read_set)) {
+        // found a socket ready to read
+      } 
+    }
+  }
+
 }
