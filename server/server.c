@@ -7,13 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <sys/time.h>
 
 #define PORT "8080"
 #define BACKLOG 20
-#define HEADER_LENGTH 40
+#define HEADER_LENGTH 36
 
 int get_listener_socket() {
   struct addrinfo hints, *res, *p;
@@ -42,25 +42,26 @@ int get_listener_socket() {
 
     setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 
-    if(bind(listener, p->ai_addr, p->ai_addrlen) == -1) {
+    if (bind(listener, p->ai_addr, p->ai_addrlen) == -1) {
       // error binding, close the listener socket and continue to next node
       close(listener);
       continue;
     }
 
-    if(listen(listener, BACKLOG) == -1) {
+    if (listen(listener, BACKLOG) == -1) {
       // error listening, close socket and continue
       close(listener);
       continue;
     }
 
-    // if we make it this far we have successfully bound the listening socket to a port
+    // if we make it this far we have successfully bound the listening socket to
+    // a port
     break;
   }
 
   freeaddrinfo(res);
 
-  if(p == NULL) {
+  if (p == NULL) {
     // this means we failed to bind. shut down server
     printf("Failed to bind to a port\nShutting down...");
     exit(2);
@@ -70,23 +71,64 @@ int get_listener_socket() {
 }
 
 /*
-* Header will be broken down like so:
-* bytes 0-5: get || post. NUL padded
-* 5-35 name of the file including extension
-* 35-40 total size of the packet
-*/
+ * Header will be broken down like so:
+ * bytes 0-5: get || post. NUL padded
+ * 5-35 name of the file including extension
+ * 35-39 total size of the packet
+ */
 
-// char* unpack_header(int fd) {
-//   char* buf = malloc(sizeof(char) * HEADER_LENGTH);
-//   
-// }
+// returns -1 if an error occurs, this signifies that something went wrong and close the connection
+// stores the data inside the pointers passed to the function
+int unpack_header(int fd, char* req_type, char* filename, int *size) {
+  char* buf = malloc(sizeof(char) * HEADER_LENGTH);
+  int bytes_read = 0;
+
+  while(bytes_read < HEADER_LENGTH) {
+    int len = recv(fd, buf, HEADER_LENGTH - bytes_read, 0);
+    if(len <= 0) {
+      if(len == -1) {
+        printf("error occurred when reading \n");
+      } else {
+        printf("client closed connection\n");
+      }
+      return -1;
+    }
+
+    bytes_read += len;
+  }
+
+  // now that we have read the header into the buffer
+  // we can focus on copying the data into the pointers passed in as arguments
+  // req type
+  for(int i = 0; i < 5; i++) {
+    if(buf[i] == '\0') {
+      req_type[i] = '\0';
+      break;
+    }
+    req_type[i] = buf[i];
+  }
+
+
+  // filename
+  for(int i = 5, j = 0; i < 35; i++) {
+    if(buf[i] == '\0') {
+      filename[j] = '\0';
+      break;
+    }
+
+    filename[j] = buf[i];
+  }
+
+  *size = buf[HEADER_LENGTH-1];
+
+  return 0;
+}
 
 int main() {
   int listener_fd = get_listener_socket();
   struct sockaddr_storage their_addr;
   socklen_t their_addr_size;
   int newfd;
-
 
   int numfds = listener_fd;
   fd_set master_set, read_set;
@@ -95,35 +137,36 @@ int main() {
   FD_ZERO(&read_set);
   FD_SET(listener_fd, &master_set);
 
-
   // for now I will only handle 1 request at a time
   // I plan on expanding this to be multithreaded in the future
-  while(true) { 
+  while (true) {
     read_set = master_set;
-    if(select(numfds + 1, &read_set, NULL, NULL, NULL) == -1) {
+    if (select(numfds + 1, &read_set, NULL, NULL, NULL) == -1) {
       printf("Select error\n");
       return 1;
     }
 
-    for(int i = 0; i < numfds + 1; i++) {
-      if(FD_ISSET(i, &read_set)) {
+    for (int i = 0; i < numfds + 1; i++) {
+      if (FD_ISSET(i, &read_set)) {
         // found a socket ready to read
-        if(i == listener_fd) {
+        if (i == listener_fd) {
           // there is a connection waiting to be accepted
-          newfd = accept(i, (struct sockaddr* )&their_addr, &their_addr_size) == 1;
+          newfd =
+              accept(i, (struct sockaddr *)&their_addr, &their_addr_size) == 1;
           if (newfd == -1) {
             printf("error accepting connection\n");
             continue;
           }
 
           FD_SET(newfd, &master_set);
-          if(newfd > numfds) {
+          if (newfd > numfds) {
             numfds = newfd;
           }
           printf("New connection added\n");
+        } else {
+
         }
-      } 
+      }
     }
   }
-
 }
