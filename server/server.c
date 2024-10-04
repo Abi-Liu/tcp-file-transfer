@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,12 @@
 #define HEADER_LENGTH 36
 // header length for client
 #define HEADER_LENGTH_C 31
+
+int parse_file(char *filename);
+int pack_header(char *filename, uint8_t *file, int size);
+void send_message(char *message);
+void send_full_response(char *filename, char *message, int size);
+
 
 int get_listener_socket() {
   struct addrinfo hints, *res, *p;
@@ -79,16 +86,17 @@ int get_listener_socket() {
  * 35-39 total size of the packet
  */
 
-// returns -1 if an error occurs, this signifies that something went wrong and close the connection
-// stores the data inside the pointers passed to the function
-int unpack_header(int fd, char* req_type, char* filename, int *size) {
-  char* buf = malloc(sizeof(uint8_t) * HEADER_LENGTH);
+// returns -1 if an error occurs, this signifies that something went wrong and
+// close the connection stores the data inside the pointers passed to the
+// function
+int unpack_header(int fd, char *req_type, char *filename, int *size) {
+  char *buf = malloc(sizeof(uint8_t) * HEADER_LENGTH);
   int bytes_read = 0;
 
-  while(bytes_read < HEADER_LENGTH) {
+  while (bytes_read < HEADER_LENGTH) {
     int len = recv(fd, buf, HEADER_LENGTH - bytes_read, 0);
-    if(len <= 0) {
-      if(len == -1) {
+    if (len <= 0) {
+      if (len == -1) {
         printf("error occurred when reading \n");
       } else {
         printf("client closed connection\n");
@@ -102,20 +110,19 @@ int unpack_header(int fd, char* req_type, char* filename, int *size) {
   // now that we have read the header into the buffer
   // we can focus on copying the data into the pointers passed in as arguments
   // req type
-  for(int i = 0; i < 5; i++) {
-    if(buf[i] == '\0') {
+  for (int i = 0; i < 5; i++) {
+    if (buf[i] == '\0') {
       req_type[i] = '\0';
       break;
     }
     req_type[i] = buf[i];
   }
 
-
   // filename
   // for now I am just assuming that the filename will be less than 30chars
   // TODO: add error handling for this case in the future
-  for(int i = 5, j = 0; i < 35; i++) {
-    if(buf[i] == '\0') {
+  for (int i = 5, j = 0; i < 35; i++) {
+    if (buf[i] == '\0') {
       filename[j] = '\0';
       break;
     }
@@ -123,7 +130,7 @@ int unpack_header(int fd, char* req_type, char* filename, int *size) {
     filename[j] = buf[i];
   }
 
-  *size = buf[HEADER_LENGTH-1];
+  *size = buf[HEADER_LENGTH - 1];
 
   return 0;
 }
@@ -173,22 +180,22 @@ int main() {
           char req_type[5], filename[30];
           int *size;
 
-          if(unpack_header(i, req_type, filename, size) == -1) {
+          if (unpack_header(i, req_type, filename, size) == -1) {
             printf("connection unstable\n");
             close(i);
             FD_CLR(i, &master_set);
             continue;
           }
 
-          if(strcmp(req_type, "get") == 0) {
+          if (strcmp(req_type, "get") == 0) {
             // get request, aka server sends file to client
 
-          } else if(strcmp(req_type, "post") == 0) {
+          } else if (strcmp(req_type, "post") == 0) {
             // post request, client uploading file to store in server
           } else {
             printf("unknown request type\n");
             // send a message before closing the connection
-            // first we have to write the header packet to the client 
+            // first we have to write the header packet to the client
             close(i);
             FD_CLR(i, &master_set);
             continue;
@@ -199,25 +206,58 @@ int main() {
   }
 }
 
-int parse_file(char* filename) {
+int parse_file(char *filename) {
   FILE *file = fopen(filename, "rb");
-  
-  if(file == NULL) {
+
+  if (file == NULL) {
     // file does not exist, return -1 to signify error
     // no need to close since file does not exist / was not opened
     return -1;
   }
 
+  // because we don't know the length of the file, we need to dynamically
+  // reallocate the buffer as we read the file
+  int size = 0;
+  int capacity = 10;
+  uint8_t *buf = malloc(sizeof(uint8_t) * capacity);
+
+  if (buf == NULL) {
+    return -1;
+  }
+
+  while (fread(buf, sizeof(uint8_t), 1, file) > 0) {
+    size++;
+    if (size >= capacity) {
+      capacity *= 2;
+      uint8_t *tmp = realloc(buf, capacity);
+
+      if (tmp == NULL) {
+        printf("error reallocating buffer\n");
+        free(buf);
+        return -1;
+      }
+
+      buf = tmp;
+    }
+  }
+
+  // reallocate the buffer to be the exact size we need
+  uint8_t *tmp = realloc(buf, sizeof(uint8_t) * size);
+  if (tmp == NULL) {
+    printf("error reallocating buffer\n");
+    free(buf);
+    return -1;
+  }
+
+  buf = tmp;
+  fclose(file);
+  if (pack_header(filename, buf, size) == -1) {
+    return -1;
+  }
 }
 
-void pack_header(char* filename) {
+int pack_header(char *filename, uint8_t *file, int size) {}
 
-}
+void send_message(char *message) {}
 
-void send_message(char* message) {
-
-}
-
-void send_full_response(char* filename, char* message, int size) {
-  
-}
+void send_full_response(char *filename, char *message, int size) {}
