@@ -14,6 +14,8 @@
 #define PORT "8080"
 #define BACKLOG 20
 #define HEADER_LENGTH 36
+// header length for client
+#define HEADER_LENGTH_C 31
 
 int get_listener_socket() {
   struct addrinfo hints, *res, *p;
@@ -80,7 +82,7 @@ int get_listener_socket() {
 // returns -1 if an error occurs, this signifies that something went wrong and close the connection
 // stores the data inside the pointers passed to the function
 int unpack_header(int fd, char* req_type, char* filename, int *size) {
-  char* buf = malloc(sizeof(char) * HEADER_LENGTH);
+  char* buf = malloc(sizeof(uint8_t) * HEADER_LENGTH);
   int bytes_read = 0;
 
   while(bytes_read < HEADER_LENGTH) {
@@ -110,6 +112,8 @@ int unpack_header(int fd, char* req_type, char* filename, int *size) {
 
 
   // filename
+  // for now I am just assuming that the filename will be less than 30chars
+  // TODO: add error handling for this case in the future
   for(int i = 5, j = 0; i < 35; i++) {
     if(buf[i] == '\0') {
       filename[j] = '\0';
@@ -164,9 +168,56 @@ int main() {
           }
           printf("New connection added\n");
         } else {
+          // new request from a client!! time to transfer some files
+          // first we read the header
+          char req_type[5], filename[30];
+          int *size;
 
+          if(unpack_header(i, req_type, filename, size) == -1) {
+            printf("connection unstable\n");
+            close(i);
+            FD_CLR(i, &master_set);
+            continue;
+          }
+
+          if(strcmp(req_type, "get") == 0) {
+            // get request, aka server sends file to client
+
+          } else if(strcmp(req_type, "post") == 0) {
+            // post request, client uploading file to store in server
+          } else {
+            printf("unknown request type\n");
+            // send a message before closing the connection
+            // first we have to write the header packet to the client 
+            close(i);
+            FD_CLR(i, &master_set);
+            continue;
+          }
         }
       }
     }
   }
+}
+
+int parse_file(char* filename) {
+  FILE *file = fopen(filename, "rb");
+  
+  if(file == NULL) {
+    // file does not exist, return -1 to signify error
+    // no need to close since file does not exist / was not opened
+    return -1;
+  }
+
+}
+
+void pack_header(char* filename) {
+
+}
+
+void send_message(char* message) {
+
+}
+
+void send_full_response(char* filename, char* message, int size) {
+  
 }
