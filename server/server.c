@@ -189,7 +189,7 @@ int main() {
 
           if (strcmp(req_type, "get") == 0) {
             // get request, aka server sends file to client
-
+            parse_file(filename);
           } else if (strcmp(req_type, "post") == 0) {
             // post request, client uploading file to store in server
           } else {
@@ -254,9 +254,17 @@ int parse_file(char *filename) {
   if (pack_header(filename, buf, size) == -1) {
     return -1;
   }
+
+  for(int i = 0; i < size; i++) {
+    printf("%c", buf[i]);
+  }
+
+  return 0;
 }
 
-int pack_header(char *filename, uint8_t *file, int size) {}
+int pack_header(char *filename, uint8_t *file, int size) {
+  return 0;
+}
 
 void send_message(char *message) {}
 
